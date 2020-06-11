@@ -1,0 +1,107 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+struct MParticle
+{
+	float3 position;
+	float3 velocity;
+	float3 direction;
+
+	float mass;
+	float lifetime;
+	float radius;
+
+};
+
+RWStructuredBuffer<MParticle> ParticleBuffer;
+RWStructuredBuffer<float3> direction;
+
+
+
+float3 ExternalForce;
+float3 Gravity;
+float3 emitterposition;
+float particleLifeTime;
+
+float dt;
+uint ParticleCunt;
+
+
+float coeffOfRestitution = 0.5f; // Restitution value
+float coeffOfRepulsion = 1;     // <- | ->
+
+
+MParticle Update(MParticle p,float dt)
+{
+	if (p.lifetime < 0)
+	{
+		p.position = emitterposition;
+		p.lifetime = particleLifeTime;
+		p.velocity = p.direction; // random velocity
+	}
+	else {
+
+		p.lifetime -= dt;
+		p.velocity += p.mass * Gravity * dt;
+		p.position += p.velocity * dt;
+	}
+	return p;
+}
+MParticle  Collision(MParticle p) {
+	if ((p.position.y - p.radius < 0) && (p.velocity.y < 0)) {
+		p.velocity.y = - coeffOfRestitution * p.velocity.y;
+		//p.position.y = clamp(p.position.y,0  + p.radius, 100 + p.radius);
+		p.position.y = 0 + p.radius;
+	}
+	return p;
+}
+
+//bool CheckParticleParticleCollision(float3 pPos1, float pR1, float3 pPos2, float pR2) {
+//	float3 distance = pPos1 - pPos2;
+//	return dot(distance, distance) <= (pR2 + pR1) * (pR2 + pR1);
+//}
+//
+//
+//float ParticleParticleDistance(float3 pos1, float r1, float3 pos2, float r2)
+//{
+//	float3 d = pos1 - pos2;
+//	return sqrt(dot(d, d)) - r1 - r2;
+//}
+
+//MParticle SelfCollision (MParticle particle, MParticle particleOther) 
+//{
+//	if (CheckParticleParticleCollision(particle.position, particle.radius, particleOther.position, particleOther.radius))
+//	{
+//		float3 relativeVelocity = particleOther.velocity - particle.velocity;
+//		float3 normal = normalize(particleOther.position - particle.position);
+//		float velocityProjection = dot(relativeVelocity, normal);
+//
+//			if (velocityProjection < 0)
+//			{
+//				float impScale = -(1.0f + coeffOfRestitution) * velocityProjection / (particle.mass + particleOther.mass);
+//					float3 impulse = impScale * normal;
+//					particle.velocity -= particle.mass * impulse;
+//					particle.position += normal * ParticleParticleDistance(particle.position, particle.radius, particleOther.position, particleOther.radius) * coeffOfRepulsion;
+//			}
+//	}
+//	return particle;
+//}
+
+
+[numthreads(64,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	MParticle particle = ParticleBuffer[id.x];
+	particle = Update(particle,dt);
+	particle = Collision(particle);
+	
+	/*for (uint i = 0; i < ParticleCunt; ++i)
+	{
+		if (i == id.x)
+			continue;
+		MParticle particleOther = ParticleBuffer[i];
+		particle = SelfCollision(particle, particleOther);
+	}*/
+
+	ParticleBuffer[id.x] = particle;
+}
